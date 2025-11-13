@@ -12,7 +12,7 @@
 
 简体中文
 
-[在线演示](https://tmarks.669696.xyz) | [问题反馈](https://github.com/ai-tmarks/tmakrs/issues)
+[在线演示](https://tmarks.669696.xyz) | [问题反馈](https://github.com/yourusername/tmarks/issues)
 
 </div>
 
@@ -313,8 +313,8 @@ aitmarks.v.0.0.1.0-tab/
 #### 1. 克隆项目
 
 ```bash
-git clone https://github.com/ai-tmarks/tmakrs.git
-cd tmakrs
+git clone https://github.com/yourusername/tmarks.git
+cd tmarks
 ```
 
 #### 2. 安装依赖
@@ -610,62 +610,244 @@ wrangler d1 execute tmarks-prod-db --command "SELECT name FROM sqlite_master WHE
 
 #### 5. 部署到 Cloudflare Pages
 
-**方式一：通过 Cloudflare Dashboard（推荐）**
+**方式一：通过 Cloudflare Dashboard（推荐，支持 Git 自动部署）**
+
+#### 步骤1: 连接Git仓库
 
 1. 将代码推送到 GitHub 仓库
 2. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
 3. 进入「Workers & Pages」→「Create application」→「Pages」→「Connect to Git」
-4. 选择你的 GitHub 仓库
-5. 配置构建设置：
-   - **项目名称**: `tmarks`（或自定义）
-   - **生产分支**: `main`
-   - **框架预设**: `None`
-   - **构建命令**: `cd tmarks && pnpm install && pnpm build`
-   - **构建输出目录**: `tmarks/dist`
-   - **根目录**: `/`（留空或选择根目录）
-6. 点击「Environment variables」，添加环境变量：
-   - `ALLOW_REGISTRATION`: `true`
-   - `ENVIRONMENT`: `production`
-   - `JWT_ACCESS_TOKEN_EXPIRES_IN`: `365d`
-   - `JWT_REFRESH_TOKEN_EXPIRES_IN`: `365d`
-7. 点击「Save and Deploy」
-8. 部署完成后，进入项目设置：
-   - 「Settings」→「Functions」→「D1 database bindings」
-   - 添加绑定：变量名 `DB`，选择之前创建的数据库
-   - 「Settings」→「Functions」→「KV namespace bindings」
-   - 添加绑定：变量名 `RATE_LIMIT_KV`，选择对应的 KV
-   - 添加绑定：变量名 `PUBLIC_SHARE_KV`，选择对应的 KV
-9. 重新部署以应用绑定
+4. 选择你的 GitHub 仓库并授权访问
 
-**方式二：通过 Wrangler CLI**
+#### 步骤2: 配置构建设置
+
+⚠️ **关键配置 - 必须正确设置，否则Functions无法部署**
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| **项目名称** | `tmarks` | 或自定义名称 |
+| **生产分支** | `main` | 主分支名称 |
+| **框架预设** | `None` | 不使用预设 |
+| **根目录 (Root directory)** | `tmarks` | ⚠️ **必须设置** |
+| **构建命令** | `pnpm install && pnpm build:deploy` | ⚠️ **必须使用build:deploy** |
+| **构建输出目录** | `.deploy` | ⚠️ **相对于根目录** |
+
+**环境变量**（可选）:
+- `NODE_VERSION`: `18` 或更高
+
+> 💡 **配置说明**:
+>
+> **为什么要设置Root directory为`tmarks`?**
+> - Cloudflare会进入`tmarks`目录作为工作目录
+> - 这样才能正确找到`functions`目录和`wrangler.toml`
+>
+> **为什么要使用`build:deploy`命令?**
+> - 普通的`build`命令只生成`dist`目录(静态文件)
+> - `build:deploy`会运行`scripts/prepare-deploy.js`脚本
+> - 脚本会将`dist`和`functions`合并到`.deploy`目录
+> - Cloudflare Pages需要静态文件和Functions在同一层级
+>
+> **构建输出目录为什么是`.deploy`?**
+> - 这是相对于Root directory(`tmarks`)的路径
+> - 实际路径是`tmarks/.deploy`
+> - 该目录包含静态文件和`functions`目录
+
+#### 步骤3: 首次部署
+
+点击「Save and Deploy」，等待首次部署完成。
+
+**预期部署日志:**
+```
+Found wrangler.toml file. Reading build configuration...
+pages_build_output_dir: .deploy
+Found Functions directory at /functions. Uploading.
+✨ Compiled Worker successfully
+Success: Assets published!
+```
+
+如果看到 `Note: No functions dir at /functions found. Skipping.`，说明配置有误。
+
+#### 步骤4: 配置敏感环境变量
+
+🔐 **安全配置 - 必须在Dashboard中配置，不要提交到Git**
+
+进入项目设置：「Settings」→「Environment variables」→「Production」
+
+**添加以下敏感变量:**
+
+| 变量名 | 值 | 说明 |
+|--------|-----|------|
+| `JWT_SECRET` | `生成的随机密钥` | ⚠️ **必须配置** JWT签名密钥（至少48字符） |
+| `ENCRYPTION_KEY` | `生成的随机密钥` | ⚠️ **必须配置** 数据加密密钥（至少48字符） |
+
+**⚠️ 重要：以下变量已在wrangler.toml中配置，不要在Dashboard中重复添加:**
+- ~~`ALLOW_REGISTRATION`~~ (重复会导致部署失败)
+- ~~`ENVIRONMENT`~~ (重复会导致部署失败)
+- ~~`JWT_ACCESS_TOKEN_EXPIRES_IN`~~ (重复会导致部署失败)
+- ~~`JWT_REFRESH_TOKEN_EXPIRES_IN`~~ (重复会导致部署失败)
+
+> 🔐 **如何生成安全密钥:**
+>
+> **使用OpenSSL (推荐):**
+> ```bash
+> # 生成JWT_SECRET
+> openssl rand -base64 48
+>
+> # 生成ENCRYPTION_KEY
+> openssl rand -base64 48
+> ```
+>
+> **使用Node.js:**
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+> ```
+>
+> **使用PowerShell:**
+> ```powershell
+> [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+> ```
+>
+> ⚠️ **安全警告**：
+> - **永远不要将JWT_SECRET和ENCRYPTION_KEY提交到Git仓库!**
+> - 生产环境和开发环境必须使用不同的密钥
+> - 密钥至少48个字符，使用强随机生成
+
+#### 步骤5: 配置资源绑定
+
+进入项目设置：「Settings」→「Functions」
+
+**配置D1数据库绑定:**
+
+1. 找到 **D1 database bindings** 部分
+2. 点击 "Add binding"
+3. 填写:
+   - Variable name: `DB`
+   - D1 database: 选择 `tmarks-prod-db`
+4. 点击 "Save"
+
+**配置KV命名空间绑定:**
+
+> ⚠️ **重要说明**:
+> - wrangler.toml中的KV配置在Git部署时**不会自动生效**
+> - 必须在Dashboard中手动创建并绑定KV命名空间
+> - 或者先用Wrangler CLI创建KV,然后更新wrangler.toml中的ID
+
+**方式1: 在Dashboard中创建并绑定 (推荐)**
+
+1. 找到 **KV namespace bindings** 部分
+2. 添加第一个绑定:
+   - 点击 "Add binding"
+   - Variable name: `RATE_LIMIT_KV`
+   - KV namespace: 选择 "Create a new namespace"
+   - 输入名称: `tmarks-rate-limit`
+   - 点击 "Save"
+3. 添加第二个绑定:
+   - 点击 "Add binding"
+   - Variable name: `PUBLIC_SHARE_KV`
+   - KV namespace: 选择 "Create a new namespace"
+   - 输入名称: `tmarks-public-share`
+   - 点击 "Save"
+
+**方式2: 使用Wrangler CLI创建KV**
 
 ```bash
 cd tmarks
 
-# 构建项目
+# 创建RATE_LIMIT_KV
+wrangler kv:namespace create "RATE_LIMIT_KV"
+# 记录输出的ID
+
+# 创建PUBLIC_SHARE_KV
+wrangler kv:namespace create "PUBLIC_SHARE_KV"
+# 记录输出的ID
+
+# 更新tmarks/wrangler.toml中的KV ID
+# 将"请替换为实际的KV_ID"替换为实际的ID
+```
+
+#### 步骤6: 重新部署并验证
+
+配置完成后，重新部署:
+
+**方式1: 在Dashboard中重试部署**
+- 进入「Deployments」
+- 找到最新的部署
+- 点击「Retry deployment」
+
+**方式2: 推送新提交触发自动部署**
+```bash
+git commit --allow-empty -m "Trigger redeploy after configuration"
+git push
+   ```
+
+**验证部署成功:**
+
+查看部署日志,应该看到:
+```
+✅ 成功的部署日志:
+Found wrangler.toml file. Reading build configuration...
+pages_build_output_dir: .deploy
+Found Functions directory at /functions. Uploading.
+✨ Compiled Worker successfully
+Found _routes.json in output directory. Uploading.
+Success: Assets published!
+```
+
+如果看到以下错误,说明配置有问题:
+```
+❌ 错误1: Functions未部署
+Note: No functions dir at /functions found. Skipping.
+→ 检查Root directory是否设置为tmarks
+→ 检查构建命令是否使用build:deploy
+
+❌ 错误2: KV命名空间未找到
+Error: KV namespace 'xxx' not found.
+→ 在Dashboard中配置KV绑定
+
+❌ 错误3: 环境变量冲突
+Error: Binding name 'ALLOW_REGISTRATION' already in use.
+→ 删除Dashboard中与wrangler.toml重复的环境变量
+```
+
+#### 步骤7: 验证功能
+
+访问你的部署地址（例如 `https://tmarks.pages.dev`）:
+
+1. ✅ 应该能看到登录页面
+2. ✅ 注册一个测试账号
+3. ✅ 登录后创建一个书签
+4. ✅ 测试标签功能
+5. ✅ 测试搜索功能
+
+---
+
+**方式二：通过 Wrangler CLI 部署**
+
+> ⚠️ 注意: CLI部署不会自动合并dist和functions,需要手动处理
+
+```bash
+cd tmarks
+
+# 安装依赖
 pnpm install
-pnpm build
+
+# 构建并准备部署
+pnpm build:deploy
 
 # 部署到 Cloudflare Pages
-wrangler pages deploy dist --project-name=tmarks
+wrangler pages deploy .deploy --project-name=tmarks
 
 # 首次部署后，需要在 Dashboard 中绑定 D1 和 KV
 ```
 
-#### 6. 配置自定义域名（可选）
+---
+
+### 配置自定义域名（可选）
 
 1. 在 Cloudflare Dashboard 中进入你的 Pages 项目
 2. 「Custom domains」→「Set up a custom domain」
 3. 输入你的域名（需要在 Cloudflare 托管 DNS）
 4. 按照提示完成 DNS 配置
-
-#### 7. 验证部署
-
-访问你的部署地址（例如 `https://tmarks.pages.dev`），应该能看到登录页面。
-
-1. 注册一个账号
-2. 登录后创建一个书签
-3. 测试 AI 标签生成功能（需要在扩展中配置 AI API Key）
 
 ### 部署浏览器扩展
 
@@ -701,18 +883,52 @@ Cloudflare Pages 支持自动部署：
 
 ### 常见问题
 
-**Q: 部署后无法访问 API？**
+**Q: 部署时出现 `npm error EEXIST: file already exists` 错误？**
+- Cloudflare Pages 构建环境已预装 pnpm,不需要再次安装
+- 确保构建命令为: `cd tmarks && pnpm install && pnpm build`
+- 不要使用 `npm install -g pnpm`,会导致文件冲突
+
+**Q: 部署后无法访问 API 或注册功能不可用(405错误)？**
+
+⚠️ **最常见原因：Root directory 配置错误**
+
+检查 Cloudflare Pages 的部署日志,如果看到:
+```
+Note: No functions dir at /functions found. Skipping.
+```
+
+说明 Functions 没有被部署。解决方法:
+
+1. 进入「Settings」→「Builds and deployments」→「Edit configuration」
+2. 确认以下配置:
+   - **Root directory**: `tmarks` ⚠️ **必须设置**
+   - **Build command**: `pnpm install && pnpm build:deploy`
+   - **Build output directory**: `.deploy`
+3. 保存后重新部署
+
+**其他可能原因:**
+- 敏感环境变量未在 Cloudflare Dashboard 中设置
 - 检查 D1 和 KV 绑定是否正确
-- 检查环境变量是否设置
-- 查看 Cloudflare Pages 的部署日志
+- 检查环境变量是否在「Settings」→「Environment variables」→「Production」中设置
+- 必须设置的敏感环境变量：`JWT_SECRET`、`ENCRYPTION_KEY`
+- ⚠️ 注意：`ALLOW_REGISTRATION`等非敏感变量已在wrangler.toml中配置,不要在Dashboard中重复添加
 
 **Q: 数据库迁移失败？**
 - 确保 `wrangler.toml` 中的 `database_id` 正确
 - 使用 `wrangler d1 migrations list tmarks-prod-db` 查看迁移状态
 
-**Q: JWT 认证失败？**
-- 确保 `JWT_SECRET` 已设置且足够长（至少 32 个字符）
-- 检查 Secrets 是否正确设置
+**Q: JWT 认证失败或注册时提示"Server returned empty response"？**
+- 确保 `JWT_SECRET` 已在 Cloudflare Dashboard 中设置且足够长（至少 48 个字符）
+- 确保 `ENCRYPTION_KEY` 已设置（至少 48 个字符）
+- ⚠️ **注意**：敏感信息(`JWT_SECRET`、`ENCRYPTION_KEY`)必须在Dashboard中配置,不要提交到Git
+- 非敏感变量(`ALLOW_REGISTRATION`等)已在wrangler.toml中配置,不要在Dashboard中重复添加
+- 设置后需要重新部署才能生效
+
+**Q: 部署时出现"Binding name 'xxx' already in use"错误？**
+- 这是因为环境变量在wrangler.toml和Dashboard中重复配置了
+- 解决方法：删除Dashboard中与wrangler.toml重复的环境变量
+- 只在Dashboard中配置敏感信息：`JWT_SECRET`、`ENCRYPTION_KEY`
+- 其他变量保留在wrangler.toml中
 
 **Q: 如何更新数据库架构？**
 ```bash
@@ -1022,7 +1238,7 @@ X-RateLimit-Reset: 1640000000
 
 1. **Fork 项目**
    - 点击右上角的 Fork 按钮
-   - 克隆你的 Fork：`git clone https://github.com/your-username/tmakrs.git`
+   - 克隆你的 Fork：`git clone https://github.com/your-username/tmarks.git`
 
 2. **创建特性分支**
    ```bash
@@ -1125,7 +1341,7 @@ pnpm build
 
 如果你发现了 Bug，请：
 
-1. 在 [Issues](https://github.com/ai-tmarks/tmakrs/issues) 中搜索是否已有相关问题
+1. 在 [Issues](https://github.com/yourusername/tmarks/issues) 中搜索是否已有相关问题
 2. 如果没有，创建新的 Issue
 3. 使用 Bug 报告模板
 4. 提供详细的复现步骤
@@ -1135,7 +1351,7 @@ pnpm build
 
 如果你有新功能建议，请：
 
-1. 在 [Issues](https://github.com/ai-tmarks/tmakrs/issues) 中创建 Feature Request
+1. 在 [Issues](https://github.com/yourusername/tmarks/issues) 中创建 Feature Request
 2. 描述功能的使用场景和价值
 3. 提供可能的实现方案（可选）
 4. 等待社区讨论和反馈
@@ -1154,79 +1370,16 @@ pnpm build
 - 尊重所有贡献者
 - 保持友好和专业
 - 接受建设性的批评
+- 关注项目的最佳利益
 
 ---
+
+
 
 ## 📝 许可证
 
 本项目采用 [MIT License](LICENSE) 开源协议。
 
----
-
-## 🙏 致谢
-
-感谢以下开源项目和服务：
-
-### 核心技术
-
-- [React](https://reactjs.org/) - 强大的 UI 框架
-- [TypeScript](https://www.typescriptlang.org/) - JavaScript 的超集
-- [Vite](https://vitejs.dev/) - 下一代前端构建工具
-- [Cloudflare](https://www.cloudflare.com/) - 全球边缘网络平台
-  - [Cloudflare Pages](https://pages.cloudflare.com/) - 静态站点托管
-  - [Cloudflare D1](https://developers.cloudflare.com/d1/) - 边缘 SQLite 数据库
-  - [Cloudflare KV](https://developers.cloudflare.com/kv/) - 键值存储
-  - [Cloudflare Workers](https://workers.cloudflare.com/) - 无服务器计算
-
-### UI 和样式
-
-- [TailwindCSS](https://tailwindcss.com/) - 实用优先的 CSS 框架
-- [Lucide](https://lucide.dev/) - 精美的开源图标库
-- [React Router](https://reactrouter.com/) - React 路由库
-
-### 状态管理和数据
-
-- [Zustand](https://zustand-demo.pmnd.rs/) - 轻量级状态管理
-- [TanStack Query](https://tanstack.com/query) - 强大的数据获取和缓存
-- [TanStack Virtual](https://tanstack.com/virtual) - 虚拟滚动
-- [Dexie.js](https://dexie.org/) - IndexedDB 封装库
-
-### 交互和工具
-
-- [dnd-kit](https://dndkit.com/) - 现代化的拖拽库
-- [date-fns](https://date-fns.org/) - 日期处理库
-- [DOMPurify](https://github.com/cure53/DOMPurify) - XSS 防护
-
-### AI 服务
-
-- [OpenAI](https://openai.com/) - GPT 系列模型
-- [Anthropic](https://www.anthropic.com/) - Claude 系列模型
-- [DeepSeek](https://www.deepseek.com/) - DeepSeek 模型
-- [智谱 AI](https://open.bigmodel.cn/) - GLM 系列模型
-- [ModelScope](https://modelscope.cn/) - 阿里云模型平台
-- [SiliconFlow](https://siliconflow.cn/) - 多模型聚合平台
-
-### 开发工具
-
-- [ESLint](https://eslint.org/) - 代码检查
-- [Prettier](https://prettier.io/) - 代码格式化
-- [Husky](https://typicode.github.io/husky/) - Git Hooks
-- [lint-staged](https://github.com/okonet/lint-staged) - 暂存文件检查
-- [@crxjs/vite-plugin](https://crxjs.dev/vite-plugin) - Chrome 扩展开发工具
-
-### 特别感谢
-
-- 所有为开源社区做出贡献的开发者
-- 所有使用和反馈 TMarks 的用户
-- 所有提交 Issue 和 PR 的贡献者
-
----
-
-## 📧 联系方式
-
-- **项目主页**: [GitHub Repository](https://github.com/ai-tmarks/tmakrs)
-- **在线演示**: [https://tmarks.669696.xyz](https://tmarks.669696.xyz)
-- **问题反馈**: [GitHub Issues](https://github.com/ai-tmarks/tmakrs/issues)
 ## ❓ 常见问题 (FAQ)
 
 ### 通用问题
@@ -1324,4 +1477,3 @@ Made with ❤️ by TMarks Team
 [⬆ 回到顶部](#-tmarks)
 
 </div>
-
