@@ -13,17 +13,17 @@ database_id = "bdfa6639-e25d-4698-ad13-a4f95b8c4aa7"
 
 # KV namespaces
 # 注意: 需要先创建KV命名空间,然后填入正确的ID
-# 创建命令: wrangler kv:namespace create "RATE_LIMIT_KV"
-#          wrangler kv:namespace create "PUBLIC_SHARE_KV"
+# 创建命令: wrangler kv namespace create "RATE_LIMIT_KV"
+#          wrangler kv namespace create "PUBLIC_SHARE_KV"
 # 或者在Cloudflare Dashboard中创建: Workers & Pages → KV → Create a namespace
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "请替换为实际的KV_ID"  # 需要先创建KV命名空间
+id = "5b474fb8a6a94f08ba84a65e9110658a"
 
 [[kv_namespaces]]
 binding = "PUBLIC_SHARE_KV"
-id = "请替换为实际的KV_ID"  # 需要先创建KV命名空间
+id = "19bac6b44196434c8c5cd18dc1ed2f91"
 
 # Environment variables
 # ⚠️ 安全警告: 敏感信息不应该提交到Git仓库!
