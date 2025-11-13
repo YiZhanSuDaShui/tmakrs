@@ -9,7 +9,7 @@ pages_build_output_dir = ".deploy"
 [[d1_databases]]
 binding = "DB"
 database_name = "tmarks-prod-db"
-database_id = "bdfa6639-e25d-4698-ad13-a4f95b8c4aa7"
+database_id = "e04b4da5-ff8e-4105-99aa-e457001a7abc"
 
 # KV namespaces
 # 注意: 需要先创建KV命名空间,然后填入正确的ID
